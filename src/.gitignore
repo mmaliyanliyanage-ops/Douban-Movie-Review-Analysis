@@ -19,5 +19,5 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
-data/DMSC.csv
+EOFdata/DMSC.csv
 *.csv
