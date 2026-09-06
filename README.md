@@ -1,70 +1,371 @@
 # Douban Movie Reviews Analysis
 
-Chinese-language NLP and sentiment analysis on 1M+ user reviews scraped
-from Douban (China's largest film review platform). The project moves from
-exploratory analysis through sentiment scoring, text vectorization,
-classification, and unsupervised clustering of review content.
+## Chinese NLP, Sentiment Analysis, Text Classification & Topic Clustering
+
+An end-to-end Natural Language Processing project analyzing **1,048,575 Chinese movie reviews from Douban**.
+
+The project explores how user ratings and review text relate to sentiment, compares different text representations for sentiment classification, and uses unsupervised learning to discover patterns in review vocabulary.
+
+---
+
+## Project Overview
+
+Online movie reviews contain both structured information, such as star ratings and popularity, and unstructured information in the form of natural language.
+
+This project investigates the following questions:
+
+- How are movie ratings distributed across the dataset?
+- How well does a general-purpose Chinese sentiment model agree with user ratings?
+- Which text representation works best for classifying positive and negative reviews?
+- Can unsupervised learning discover meaningful groups of reviews?
+- Do review clusters represent sentiment, or are they more related to topics and vocabulary?
+
+The analysis combines:
+
+**Exploratory Data Analysis → Chinese NLP → Sentiment Analysis → Feature Engineering → Classification → Clustering**
+
+---
 
 ## Dataset
 
-- **Source:** `DMSC.csv` — Douban Movie Short Comments (~1,048,575 reviews)
-- **Fields:** `Star` (1–5 user rating), `Comment` (review text), `Like`
-  (popularity), `Date`, movie identifiers
-- Text-heavy steps run on a representative 20,000-row sample to keep
-  runtime manageable.
+The project uses the **Douban Movie Comment Dataset (DMSC)** containing more than one million Chinese movie reviews.
 
-## What's inside
+### Dataset size
 
-1. **EDA & Visualization** — rating distribution, ratings over time,
-   review length stats, Chinese word clouds, top-word frequency (jieba
-   tokenization + stopword filtering).
-2. **Sentiment Analysis (SnowNLP)** — compute a [0,1] sentiment score per
-   review and compare it against actual star ratings (Pearson correlation,
-   agreement rate, confusion matrix). Includes a discussion of sentiment
-   analysis limitations (sarcasm, domain slang, granularity mismatch).
-3. **Text Preprocessing** — jieba segmentation, stopword removal, tokenized
-   corpus construction; binary label creation (negative 1–2★ vs positive
-   4–5★, excluding neutral 3★).
-4. **Feature Engineering** — six vector representations compared:
-   Bag-of-Words, TF-IDF (1-gram), TF-IDF (2-gram), LSA (TruncatedSVD on
-   TF-IDF), and a lightweight Word2Vec-style mean embedding.
-5. **Binary Classification** — Logistic Regression trained on each
-   representation; evaluated with accuracy, F1, and ROC-AUC to compare
-   which vectorization best separates sentiment.
-6. **Cluster Analysis** — K-Means on TF-IDF vectors (k selected via
-   silhouette score), with top-term inspection per cluster and PCA
-   visualization to interpret topical themes (e.g. plot, acting, visuals).
-7. **Conclusion & Future Work** — key findings and next steps (e.g.
-   pretrained Chinese embeddings, deep learning classifiers).
+- **1,048,575 reviews**
+- **10 columns**
+- Approximately **80 MB**
 
-## Key findings
+### Main features
 
-- Ratings skew positive (concentrated at 4–5 stars), a common pattern on
-  review platforms.
-- SnowNLP sentiment correlates with star rating only moderately — sarcasm
-  and Douban-specific slang limit accuracy.
-- TF-IDF and its LSA projection outperform BoW and n-grams for
-  classification; Word2Vec mean is competitive but data-limited.
-- Clusters separate by **topic** (plot vs. acting vs. visuals), not by
-  sentiment — vocabulary reflects what a review is about more than how
-  positive it is.
+| Feature | Description |
+|---|---|
+| `Movie_Name_EN` | English movie title |
+| `Movie_Name_CN` | Chinese movie title |
+| `Date` | Review date |
+| `Star` | User rating from 1–5 |
+| `Comment` | Chinese review text |
+| `Like` | Number of likes |
+| `Username` | Reviewer |
+| `Crawl_Date` | Dataset crawl date |
 
-## Tech stack
+The dataset contains only **78 missing usernames**, while the main analytical fields such as ratings and comments are complete.
 
-Python · pandas · numpy · matplotlib · seaborn · jieba · SnowNLP ·
-scikit-learn · scipy · WordCloud
+---
 
-## Usage
+# Methodology
 
-```bash
-pip install pandas numpy matplotlib seaborn jieba snownlp scikit-learn scipy wordcloud jupyter
-jupyter notebook douban_movie_analysis.ipynb
-```
+## 1. Exploratory Data Analysis
 
-Place `DMSC.csv` in a `../data/` folder relative to the notebook (or update
-the load path in Section 1).
+The first stage examines the structure and characteristics of the dataset.
 
-## Data source
+The analysis includes:
 
-Douban Movie Short Comments dataset — commonly available on Kaggle
-(search "DMSC Douban Movie Short Comments dataset").
+- Rating distribution
+- Review activity over time
+- Review length analysis
+- Popularity (`Like`) distribution
+- Chinese word-frequency analysis
+- Word clouds
+- Basic statistical analysis
+
+The overall rating distribution is positively skewed toward higher ratings, with an average rating of approximately **3.59 / 5**.
+
+Because processing more than one million Chinese reviews with NLP operations is computationally expensive, a representative **20,000-review sample** is used for the text-heavy analysis.
+
+---
+
+## 2. Sentiment Analysis with SnowNLP
+
+The project uses **SnowNLP** to generate sentiment scores between 0 and 1.
+
+A threshold of:
+
+- `< 0.5` → Negative
+- `>= 0.5` → Positive
+
+is used for comparison with rating-based sentiment.
+
+### Results
+
+The 20,000-review sample produced:
+
+- Mean sentiment score: **0.648**
+- Pearson correlation with star rating: **0.2685**
+- Sentiment/rating agreement: **69.35%**
+
+The relatively low correlation demonstrates an important limitation:
+
+> User ratings and automatically inferred sentiment are related, but they are not equivalent.
+
+Possible reasons include:
+
+- Sarcasm
+- Mixed sentiment within a review
+- Movie-specific terminology
+- Chinese internet slang
+- Differences between a continuous sentiment score and a discrete 1–5 star rating
+
+The confusion matrix also shows that the model's errors are not evenly distributed between positive and negative reviews.
+
+---
+
+# 3. Chinese Text Preprocessing
+
+For the NLP pipeline, reviews are processed using:
+
+- Chinese word segmentation with **jieba**
+- Stopword removal
+- Tokenization
+- Text normalization
+
+For binary classification, reviews are divided into:
+
+### Negative
+**1–2 stars**
+
+### Positive
+**4–5 stars**
+
+3-star reviews are excluded to create a clearer separation between the two classes.
+
+This produces a classification dataset of:
+
+**10,769 reviews**
+
+with:
+
+- Positive: **8,017**
+- Negative: **2,752**
+
+---
+
+# 4. Text Representation
+
+Several approaches are compared to determine how Chinese review text should be represented numerically.
+
+### Representations tested
+
+1. **Bag of Words (BoW)**
+2. **TF-IDF**
+3. **2-gram TF-IDF**
+4. **Latent Semantic Analysis (LSA)**
+5. **Word2Vec-style mean embeddings**
+
+The classical vectorizers use a maximum vocabulary size of **5,000 features**.
+
+LSA reduces the TF-IDF representation to **100 latent dimensions**.
+
+The embedding representation uses **50-dimensional document vectors** generated by averaging word embeddings.
+
+---
+
+# 5. Binary Sentiment Classification
+
+A **Logistic Regression** classifier is trained separately on each representation.
+
+The dataset is divided into training and testing sets using a stratified **80/20 split**.
+
+The models are evaluated using:
+
+- Accuracy
+- F1 Score
+- ROC-AUC
+
+## Results
+
+| Representation | Accuracy | F1 | ROC-AUC |
+|---|---:|---:|---:|
+| **TF-IDF** | **0.817** | **0.889** | **0.846** |
+| BoW | 0.817 | 0.885 | 0.828 |
+| LSA (100) | 0.792 | 0.875 | 0.798 |
+| 2-gram TF-IDF | 0.751 | 0.856 | 0.688 |
+| Word2Vec Mean | 0.745 | 0.854 | 0.551 |
+
+### Key result
+
+**TF-IDF achieved the strongest overall performance**, particularly in ROC-AUC and F1 score.
+
+This suggests that weighting words according to their importance within the corpus is highly effective for this classification task.
+
+Interestingly, the lightweight Word2Vec-style representation performed substantially worse than TF-IDF. This is likely related to the limitations of training simple embeddings on the relatively small classification subset.
+
+---
+
+# 6. Unsupervised Clustering
+
+The project also investigates whether reviews naturally form groups based on their vocabulary.
+
+**K-Means clustering** is applied to the TF-IDF representation.
+
+The number of clusters is evaluated using the **silhouette score** for values of `k` from 2 to 7.
+
+The highest tested silhouette score occurs at:
+
+**k = 6**
+
+The resulting six clusters are then examined through their most important terms.
+
+Example cluster themes include vocabulary related to:
+
+- Movie plots and story
+- Acting and characters
+- Visual effects
+- Action scenes
+- Movie quality
+- Viewer reactions
+
+### Important observation
+
+The clusters do **not** cleanly correspond to positive and negative sentiment.
+
+Instead, they appear to capture differences in **vocabulary and topical focus**.
+
+This demonstrates an important distinction in text mining:
+
+**Topic structure ≠ sentiment structure**
+
+Two reviews can discuss the same topic while expressing completely different opinions.
+
+---
+
+# Key Findings
+
+### 1. Douban reviews are strongly concentrated toward higher ratings
+
+The average rating is approximately **3.59/5**, with 4- and 5-star reviews making up a substantial portion of the dataset.
+
+### 2. General-purpose sentiment analysis has limitations
+
+SnowNLP achieved **69.35% agreement** with rating-derived sentiment, while the Pearson correlation between sentiment score and rating was only **0.2685**.
+
+This highlights the difficulty of understanding Chinese movie-review language using a general-purpose sentiment model.
+
+### 3. TF-IDF was the strongest representation
+
+TF-IDF produced the best overall classification results:
+
+**Accuracy: 81.7%  
+F1: 88.9%  
+ROC-AUC: 84.6%**
+
+### 4. Simple representations can outperform embeddings
+
+The lightweight Word2Vec-style representation performed considerably worse than TF-IDF.
+
+This demonstrates that more sophisticated representations do not automatically produce better results, especially when the embedding training setup is limited.
+
+### 5. Clustering reveals vocabulary-driven structure
+
+The K-Means analysis suggests that reviews can be grouped according to their linguistic and topical characteristics rather than simply their sentiment.
+
+---
+
+# Limitations
+
+Several limitations should be considered when interpreting the results.
+
+### Sampling
+
+The full dataset contains over one million reviews, but the computationally expensive NLP pipeline uses a **20,000-review sample**, while the binary classification experiment uses **10,769 reviews** after filtering.
+
+Therefore, the NLP results should not automatically be generalized to every review in the full dataset.
+
+### Sentiment model
+
+SnowNLP is a general Chinese sentiment model and is not specifically trained for Douban movie reviews.
+
+It may struggle with:
+
+- Sarcasm
+- Slang
+- Mixed opinions
+- Domain-specific expressions
+
+### Word embeddings
+
+The Word2Vec-style representation is a lightweight experimental implementation rather than a production-quality pretrained embedding model.
+
+### Classification
+
+The classification experiment uses a single stratified train/test split rather than cross-validation.
+
+Therefore, the reported metrics represent this particular experimental split.
+
+### Clustering
+
+The silhouette scores are relatively low, indicating that the clusters are not strongly separated.
+
+Therefore, the cluster interpretations should be treated as exploratory rather than definitive categories.
+
+---
+
+# Future Work
+
+Several improvements could make the analysis more robust:
+
+- Train or fine-tune Chinese pretrained language models such as BERT/RoBERTa
+- Use high-quality pretrained Chinese word embeddings
+- Perform cross-validation for model comparison
+- Address class imbalance using class weights or other techniques
+- Expand NLP processing to the complete dataset
+- Compare additional classifiers such as SVM, Random Forest, and gradient boosting
+- Perform topic modeling using methods such as LDA
+- Investigate movie-specific sentiment vocabulary
+- Analyze sentiment changes over time
+- Use distributed processing with Spark or Dask for the full dataset
+
+---
+
+# Technologies
+
+### Programming
+
+- Python
+
+### Data Analysis
+
+- Pandas
+- NumPy
+- SciPy
+
+### Natural Language Processing
+
+- jieba
+- SnowNLP
+- WordCloud
+
+### Machine Learning
+
+- Scikit-learn
+- Logistic Regression
+- K-Means
+- Truncated SVD / LSA
+
+### Visualization
+
+- Matplotlib
+- Seaborn
+
+---
+
+# Project Structure
+
+```text
+Douban-Movie-Review-Analysis/
+│
+├── data/
+│   └── DMSC.csv
+│
+├── notebooks/
+│   └── douban_movie_analysis.ipynb
+│
+├── results/
+│   └── ...
+│
+├── src/
+│   └── ...
+│
+├── .gitignore
+├── README.md
+└── requirements.txt
